@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bluehour: a VR media player for the Oculus Rift DK2</title>
+    <meta
+      name="description"
+      content="Watch movies and VR video on your Oculus Rift DK2 without any Oculus software. Flat, curved, VR180, VR360 and 3D, with head tracking and gamepad support."
+    />
+    <meta name="theme-color" content="#0a1230" />
+    <link rel="canonical" href="https://mosberg.github.io/bluehour-vr/" />
+    <link rel="icon" href="assets/brand/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="assets/brand/favicon.ico" sizes="any" />
+    <link rel="apple-touch-icon" href="assets/brand/icon-192.png" />
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:title"
+      content="Bluehour: a VR media player for the Oculus Rift DK2"
+    />
+    <meta
+      property="og:description"
+      content="No Oculus runtime, SteamVR or OpenXR. Flat, curved, VR180, VR360 and 3D video on the DK2."
+    />
+    <meta property="og:url" content="https://mosberg.github.io/bluehour-vr/" />
+    <meta
+      property="og:image"
+      content="https://mosberg.github.io/bluehour-vr/assets/social-preview.png"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,400..800&display=swap"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Bluehour",
+        "applicationCategory": "MultimediaApplication",
+        "operatingSystem": "Windows, Linux",
+        "description": "A VR media player for the Oculus Rift DK2 that needs no Oculus runtime.",
+        "license": "https://opensource.org/licenses/MIT",
+        "url": "https://mosberg.github.io/bluehour-vr/",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="hero">
+      <div class="dusk" aria-hidden="true"></div>
+      <div class="wrap">
+        <div class="topbar">
+          <img src="assets/brand/logo-dark.svg" alt="Bluehour" />
+          <nav aria-label="Main">
+            <a href="guides/setup.html">Guides</a>
+            <a href="guides/hardware-testing.html">Test your DK2</a>
+            <a href="https://github.com/Mosberg/bluehour-vr">GitHub</a>
+          </nav>
+        </div>
+        <div class="hero-body">
+          <div>
+            <h1>Bluehour</h1>
+            <p class="lede">
+              Watch movies and VR video on your Oculus Rift DK2 again, without
+              any Oculus software.
+            </p>
+            <div class="actions">
+              <a class="btn primary" href="guides/setup.html"
+                >Set up Bluehour</a
+              >
+              <a class="btn" href="https://github.com/Mosberg/bluehour-vr"
+                >View on GitHub</a
+              >
+            </div>
+            <div class="install">
+              <code id="cmd"
+                >pip install
+                git+https://github.com/Mosberg/bluehour-vr.git</code
+              >
+              <button type="button" id="copy" aria-label="Copy install command">
+                Copy
+              </button>
+            </div>
+          </div>
+          <div class="lenses" aria-hidden="true">
+            <div class="lens"><div class="dusk"></div></div>
+            <div class="lens"><div class="dusk"></div></div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main id="main">
+      <section>
+        <div class="wrap">
+          <h2>What you get</h2>
+          <dl class="rows">
+            <div>
+              <dt>Flat, curved and VR video</dt>
+              <dd>
+                A cinema screen in front of you, or VR180 and VR360 all around
+                you, with mono, side-by-side and over-under 3D. Bluehour reads
+                the layout from the file name.
+              </dd>
+            </div>
+            <div>
+              <dt>Made for the DK2 lenses</dt>
+              <dd>
+                Lens distortion and colour fringing correction that you can tune
+                while you watch.
+              </dd>
+            </div>
+            <div>
+              <dt>Head tracking without the runtime</dt>
+              <dd>
+                Rotation comes straight from the headset's sensor over USB. Lean
+                and move using the DK2 camera or a Wii Remote's IR camera.
+              </dd>
+            </div>
+            <div>
+              <dt>Any controller</dt>
+              <dd>
+                Keyboard, Wii Remote, or a USB gamepad: Xbox One, PS3, or a
+                raphnet adapter for Classic controllers, Nunchuks and guitars.
+              </dd>
+            </div>
+            <div>
+              <dt>Plays almost any file</dt>
+              <dd>
+                Decoding, audio, subtitles and web addresses come from libmpv.
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <section>
+        <div class="wrap">
+          <h2>Where it stands</h2>
+          <div class="status">
+            <p><strong>Alpha. Not yet tested on a real DK2.</strong></p>
+            <p>
+              The maths, sensor decoding, Wii Remote protocol and gamepad logic
+              are covered by automated tests. Lens values, axis directions and
+              camera behaviour may need tuning on your headset, and the guides
+              show how.
+            </p>
+            <p>
+              If you have a DK2, the
+              <a href="guides/hardware-testing.html">hardware checklist</a>
+              takes about ten minutes and helps more than anything else.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="wrap">
+          <h2>Start in four steps</h2>
+          <ol class="steps">
+            <li>
+              <div>
+                <p>
+                  Install Python 3.9 or newer and libmpv. On Windows put
+                  <code>libmpv-2.dll</code> in the folder you run Bluehour from.
+                </p>
+              </div>
+            </li>
+            <li>
+              <div>
+                <p>
+                  Plug the DK2 into your graphics card and USB, make it an
+                  extended monitor, and set it to 1920x1080 at 75 Hz.
+                </p>
+              </div>
+            </li>
+            <li>
+              <div>
+                <p>Install Bluehour and check that it sees the headset.</p>
+                <pre><code>pip install git+https://github.com/Mosberg/bluehour-vr.git
+bluehour --list-monitors</code></pre>
+              </div>
+            </li>
+            <li>
+              <div>
+                <p>Play something.</p>
+                <pre><code>bluehour movie.mp4
+bluehour --proj vr180 --stereo sbs clip.mp4
+bluehour --windowed movie.mp4   # preview without a headset</code></pre>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section>
+        <div class="wrap">
+          <h2>Controls</h2>
+          <div class="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Action</th>
+                  <th>Keyboard</th>
+                  <th>Wii Remote</th>
+                  <th>Gamepad</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Pause or play</td>
+                  <td>Space</td>
+                  <td>A</td>
+                  <td>A</td>
+                </tr>
+                <tr>
+                  <td>Recenter view</td>
+                  <td>R</td>
+                  <td>B</td>
+                  <td>B</td>
+                </tr>
+                <tr>
+                  <td>Seek 10 seconds</td>
+                  <td>Left, Right</td>
+                  <td>D-pad left, right</td>
+                  <td>D-pad left, right</td>
+                </tr>
+                <tr>
+                  <td>Volume</td>
+                  <td>Up, Down</td>
+                  <td>D-pad up, down</td>
+                  <td>D-pad up, down</td>
+                </tr>
+                <tr>
+                  <td>Seek 60 seconds</td>
+                  <td>PgDn, PgUp</td>
+                  <td>Minus, Plus</td>
+                  <td>LB, RB</td>
+                </tr>
+                <tr>
+                  <td>Cycle 3D layout</td>
+                  <td>S</td>
+                  <td>1</td>
+                  <td>X</td>
+                </tr>
+                <tr>
+                  <td>Cycle screen type</td>
+                  <td>1, 2, 3, 4 picks one</td>
+                  <td>2</td>
+                  <td>Y</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The <a href="guides/usage.html">full list</a> covers size, distance,
+            IPD, distortion and more.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <div class="wrap">
+          <h2>Guides</h2>
+          <ul class="guides">
+            <li>
+              <a href="guides/setup.html">Set up</a
+              ><span>Install, libmpv, the DK2 display, Linux udev rules</span>
+            </li>
+            <li>
+              <a href="guides/usage.html">Use</a
+              ><span>Commands, layouts, every key</span>
+            </li>
+            <li>
+              <a href="guides/troubleshooting.html"
+                >Troubleshooting and limits</a
+              ><span>Tracking direction, distortion, stutter</span>
+            </li>
+            <li>
+              <a href="guides/position-tracking.html">Leaning and moving</a
+              ><span>DK2 camera and neck model</span>
+            </li>
+            <li>
+              <a href="guides/wii-remote.html">Wii Remote</a
+              ><span>Remote control, IR camera, pairing</span>
+            </li>
+            <li>
+              <a href="guides/gamepads.html">USB gamepads</a
+              ><span>Xbox One, PS3, raphnet adapter, learn mode</span>
+            </li>
+            <li>
+              <a href="guides/architecture.html">Architecture</a
+              ><span>How the pieces fit, for contributors</span>
+            </li>
+            <li>
+              <a href="guides/hardware-testing.html">Hardware test checklist</a
+              ><span>Report what works on your DK2</span>
+            </li>
+          </ul>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap">
+        <p>
+          Bluehour is open source under the
+          <a href="https://github.com/Mosberg/bluehour-vr/blob/main/LICENSE"
+            >MIT License</a
+          >. &copy; 2026 Rasmus Toftegård Mosberg.
+        </p>
+        <p>
+          An independent project, not affiliated with or endorsed by Meta,
+          Oculus, Nintendo, Microsoft, Sony or raphnet. All product names are
+          trademarks of their owners.
+        </p>
+      </div>
+    </footer>
+    <script>
+      (function () {
+        var b = document.getElementById("copy"),
+          c = document.getElementById("cmd");
+        if (!b || !navigator.clipboard) {
+          if (b) b.hidden = true;
+          return;
+        }
+        b.addEventListener("click", function () {
+          navigator.clipboard.writeText(c.textContent).then(function () {
+            b.textContent = "Copied";
+            setTimeout(function () {
+              b.textContent = "Copy";
+            }, 1800);
+          });
+        });
+      })();
+    </script>
+  </body>
+</html>
