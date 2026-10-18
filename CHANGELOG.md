@@ -10,6 +10,7 @@ and the project uses [Semantic Versioning](https://semver.org/).
 First public version. Alpha: not yet verified on real DK2 hardware.
 
 ### Added
+
 - Media playback through libmpv with flat, curved, VR180 and VR360 layouts and mono, SBS and OU 3D.
 - DK2 lens distortion and chromatic aberration shader, live tuning of size, distance, IPD and field of view.
 - Head rotation from the DK2 IMU over USB HID, with mouse look fallback.

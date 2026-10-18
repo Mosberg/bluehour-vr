@@ -55,16 +55,16 @@ Set the DK2 up as an extended monitor at 1920x1080, 75 Hz first. The [setup guid
 
 ## Documentation
 
-| Guide | What it covers |
-|---|---|
-| [Set up](docs/setup.md) | Install, libmpv, the DK2 display, Linux udev rules |
-| [Use](docs/usage.md) | Commands, layouts, the full keyboard table |
+| Guide                                                 | What it covers                                        |
+| ----------------------------------------------------- | ----------------------------------------------------- |
+| [Set up](docs/setup.md)                               | Install, libmpv, the DK2 display, Linux udev rules    |
+| [Use](docs/usage.md)                                  | Commands, layouts, the full keyboard table            |
 | [Troubleshooting and limits](docs/troubleshooting.md) | Tracking direction, distortion, stutter, known limits |
-| [Leaning and moving](docs/position-tracking.md) | DK2 camera and neck model |
-| [Wii Remote](docs/wii-remote.md) | Remote control and IR camera, pairing |
-| [USB gamepads](docs/gamepads.md) | Xbox One, PS3, raphnet adapter, learn mode |
-| [Architecture](docs/architecture.md) | How the pieces fit, for contributors |
-| [Hardware test checklist](docs/hardware-testing.md) | Report what works on your DK2 |
+| [Leaning and moving](docs/position-tracking.md)       | DK2 camera and neck model                             |
+| [Wii Remote](docs/wii-remote.md)                      | Remote control and IR camera, pairing                 |
+| [USB gamepads](docs/gamepads.md)                      | Xbox One, PS3, raphnet adapter, learn mode            |
+| [Architecture](docs/architecture.md)                  | How the pieces fit, for contributors                  |
+| [Hardware test checklist](docs/hardware-testing.md)   | Report what works on your DK2                         |
 
 The same guides are published at **<https://mosberg.github.io/bluehour-vr/>**.
 

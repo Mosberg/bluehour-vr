@@ -21,7 +21,7 @@ ruff check .                                    # no lint errors
 
 - Keep changes focused: one fix or feature per pull request.
 - Add or update tests for logic that can run without hardware (decoders, maths, mappings, parsers).
-- Update the docs and `CHANGELOG.md` (under *Unreleased*) when behaviour changes.
+- Update the docs and `CHANGELOG.md` (under _Unreleased_) when behaviour changes.
 - The window, shader and device code cannot run in CI. Say in the pull request how you tried it.
 - Describe user-visible changes in plain words. State clearly what you could not verify.
 
