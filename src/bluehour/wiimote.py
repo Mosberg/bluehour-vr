@@ -9,6 +9,9 @@ The remote must already be paired with the PC as a Bluetooth HID device (see REA
 
 Run this file directly to test a remote:   python -m bluehour.wiimote [--ir]
 """
+
+from __future__ import annotations
+
 import collections
 import sys
 import threading
@@ -19,8 +22,16 @@ PIDS = (0x0306, 0x0330)  # RVL-CNT-01 and RVL-CNT-01-TR (Wii Remote Plus)
 
 # name -> (index among the two button bytes, bit mask)
 BUTTONS = {
-    "left": (0, 0x01), "right": (0, 0x02), "down": (0, 0x04), "up": (0, 0x08), "plus": (0, 0x10),
-    "two": (1, 0x01), "one": (1, 0x02), "b": (1, 0x04), "a": (1, 0x08), "minus": (1, 0x10),
+    "left": (0, 0x01),
+    "right": (0, 0x02),
+    "down": (0, 0x04),
+    "up": (0, 0x08),
+    "plus": (0, 0x10),
+    "two": (1, 0x01),
+    "one": (1, 0x02),
+    "b": (1, 0x04),
+    "a": (1, 0x08),
+    "minus": (1, 0x10),
     "home": (1, 0x80),
 }
 REPEAT = {"left", "right", "up", "down"}
@@ -47,7 +58,7 @@ def parse_ir_extended(data):
     """Decode the 12-byte 'extended' IR block into a list of (x, y, size); x 0-1023, y 0-767."""
     pts = []
     for i in range(4):
-        b = data[3 * i:3 * i + 3]
+        b = data[3 * i : 3 * i + 3]
         if len(b) < 3 or (b[0] == 0xFF and b[1] == 0xFF and b[2] == 0xFF):
             continue
         x = b[0] | (((b[2] >> 4) & 0x03) << 8)
@@ -86,6 +97,7 @@ class Wiimote:
     def find():
         """Paths of all connected Wii Remotes."""
         import hid  # pip install hidapi
+
         seen, out = set(), []
         for pid in PIDS:
             for d in hid.enumerate(VID, pid):
@@ -96,6 +108,7 @@ class Wiimote:
 
     def _open(self):
         import hid
+
         dev = hid.device()
         dev.open_path(self.path)
         dev.set_nonblocking(0)
@@ -105,14 +118,23 @@ class Wiimote:
     def _write(self, report_id, payload):
         payload = bytearray(payload)
         if payload:
-            payload[0] |= self._rumble          # bit 0 of every output report is the rumble flag
+            payload[
+                0
+            ] |= self._rumble  # bit 0 of every output report is the rumble flag
         data = bytes([report_id]) + bytes(payload)
         if sys.platform == "win32":
-            data = data.ljust(22, b"\x00")      # Windows requires full-length output reports
+            data = data.ljust(
+                22, b"\x00"
+            )  # Windows requires full-length output reports
         self.dev.write(data)
 
     def _write_reg(self, address, data):
-        payload = bytes([0x04]) + address.to_bytes(3, "big") + bytes([len(data)]) + bytes(data).ljust(16, b"\x00")
+        payload = (
+            bytes([0x04])
+            + address.to_bytes(3, "big")
+            + bytes([len(data)])
+            + bytes(data).ljust(16, b"\x00")
+        )
         self._write(0x16, payload)
         time.sleep(0.05)
 
@@ -122,9 +144,9 @@ class Wiimote:
     def _setup(self):
         self._write(0x11, [self._led_byte()])
         if self.ir_enabled:
-            self._write(0x13, [0x04])           # IR pixel clock on
+            self._write(0x13, [0x04])  # IR pixel clock on
             time.sleep(0.05)
-            self._write(0x1A, [0x04])           # IR logic on
+            self._write(0x1A, [0x04])  # IR logic on
             time.sleep(0.05)
             self._write_reg(0xB00030, b"\x08")
             block1, block2 = IR_LEVELS.get(self.ir_level, IR_LEVELS[3])
@@ -132,11 +154,11 @@ class Wiimote:
             self._write_reg(0xB0001A, block2)
             self._write_reg(0xB00033, b"\x03")  # extended IR mode (position + size)
             self._write_reg(0xB00030, b"\x08")
-            self._mode = 0x33                   # buttons + accel + 12 IR bytes
+            self._mode = 0x33  # buttons + accel + 12 IR bytes
         else:
-            self._mode = 0x30                   # buttons only
-        self._write(0x12, [0x04, self._mode])   # 0x04 = report continuously
-        self._write(0x15, [0x00])               # ask for a status report (battery)
+            self._mode = 0x30  # buttons only
+        self._write(0x12, [0x04, self._mode])  # 0x04 = report continuously
+        self._write(0x15, [0x00])  # ask for a status report (battery)
 
     # ---------------- reading ----------------
     def _run(self):
@@ -151,7 +173,7 @@ class Wiimote:
 
     def _lost(self):
         self.connected = False
-        if self.path is None:                   # injected device (tests): stop
+        if self.path is None:  # injected device (tests): stop
             self.running = False
             return
         while self.running:
@@ -180,7 +202,7 @@ class Wiimote:
             self.battery = min(100, data[6] * 100 // 200)
             if self.debug:
                 print("Wii Remote battery ~%d%%" % self.battery)
-            try:                                # status reports reset the reporting mode on real hardware
+            try:  # status reports reset the reporting mode on real hardware
                 self._write(0x12, [0x04, self._mode])
             except Exception:  # noqa: BLE001
                 pass
@@ -242,6 +264,7 @@ class Wiimote:
 
 def main():
     import argparse
+
     ap = argparse.ArgumentParser(description="Wii Remote test")
     ap.add_argument("--ir", action="store_true", help="also show IR camera points")
     ap.add_argument("--ir-level", type=int, default=3, choices=range(1, 6))

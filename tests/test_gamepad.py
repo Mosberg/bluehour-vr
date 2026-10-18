@@ -22,13 +22,26 @@ class FakeBackend:
         p = self.pads[j]
         return list(p["buttons"]), list(p["axes"]), list(p["hats"])
 
-    def pressed(self, j):
+    def pressed(self, j, deadzone=0.0):
         p = self.pads[j]
-        return G.inputs_pressed(p["gp"] if p["gamepad"] else None, p["buttons"], p["axes"], p["hats"])
+        return G.inputs_pressed(
+            p["gp"] if p["gamepad"] else None,
+            p["buttons"],
+            p["axes"],
+            p["hats"],
+            deadzone=deadzone,
+        )
 
 
 def pad(name="Xbox One", gamepad=True, **kw):
-    d = dict(name=name, gamepad=gamepad, gp=[0] * 15, buttons=[0] * 12, axes=[0.0] * 4, hats=[0])
+    d = dict(
+        name=name,
+        gamepad=gamepad,
+        gp=[0] * 15,
+        buttons=[0] * 12,
+        axes=[0.0] * 4,
+        hats=[0],
+    )
     d.update(kw)
     return d
 
@@ -36,7 +49,9 @@ def pad(name="Xbox One", gamepad=True, **kw):
 class InputSpecTests(unittest.TestCase):
     def test_specs(self):
         s = G.inputs_pressed([1, 0, 0], [0, 1], [0.9, -0.9, 0.1, -1.0], [8, 0])
-        self.assertEqual(s, {"gp:0", "button:1", "axis:0:+", "axis:1:-", "axis:3:-", "hat:0:8"})
+        self.assertEqual(
+            s, {"gp:0", "button:1", "axis:0:+", "axis:1:-", "axis:3:-", "hat:0:8"}
+        )
 
     def test_diagonal_hat(self):
         self.assertEqual(G.inputs_pressed(None, [], [], [5]), {"hat:0:1", "hat:0:4"})
@@ -107,8 +122,17 @@ class PollTests(unittest.TestCase):
         self.assertTrue(any("--pad-config" in m for m in self.msgs))
         self.fb.pads[1]["buttons"][3] = 1
         self.assertEqual(gi.poll(0.2), [])
-        G.save_config(self.cfg, {"raphnet Classic": {"pause": "button:3", "seek_fwd": "hat:0:2",
-                                                      "vol_up": "axis:1:-", "mute": "axis:2:+"}})
+        G.save_config(
+            self.cfg,
+            {
+                "raphnet Classic": {
+                    "pause": "button:3",
+                    "seek_fwd": "hat:0:2",
+                    "vol_up": "axis:1:-",
+                    "mute": "axis:2:+",
+                }
+            },
+        )
         self.fb.pads[1]["buttons"][3] = 0
         gi = self.make()
         gi.poll(0.0)
@@ -150,12 +174,33 @@ class LearnTests(unittest.TestCase):
                 return queue.pop(0) if queue else LearnTests.state(None)
 
         lines = []
-        return G.learn_mapping(Backend(), 0, say=lines.append, now_fn=now, sleep_fn=lambda s: None,
-                               timeout=timeout), lines
+        return (
+            G.learn_mapping(
+                Backend(),
+                0,
+                say=lines.append,
+                now_fn=now,
+                sleep_fn=lambda s: None,
+                timeout=timeout,
+            ),
+            lines,
+        )
 
     def test_full_mapping(self):
-        specs = ["button:0", "button:1", "hat:0:8", "hat:0:2", "hat:0:1", "hat:0:4",
-                 "button:4", "button:5", "axis:2:+", "button:6", "button:7", "button:8"]
+        specs = [
+            "button:0",
+            "button:1",
+            "hat:0:8",
+            "hat:0:2",
+            "hat:0:1",
+            "hat:0:4",
+            "button:4",
+            "button:5",
+            "axis:2:+",
+            "button:6",
+            "button:7",
+            "button:8",
+        ]
         queue = [self.state(None)]
         for sp in specs:
             queue += [self.state(None)] * 3 + [self.state(sp)] * 2
@@ -163,7 +208,9 @@ class LearnTests(unittest.TestCase):
         self.assertEqual([mapping[a] for a in G.ACTIONS], specs)
 
     def test_skip_and_duplicate(self):
-        queue = [self.state(None)] + ([self.state(None)] * 3 + [self.state("button:0")] * 2) * 2
+        queue = [self.state(None)] + (
+            [self.state(None)] * 3 + [self.state("button:0")] * 2
+        ) * 2
         mapping, lines = self.run_learn(queue, timeout=0.5)
         self.assertEqual(mapping, {"pause": "button:0"})
         self.assertTrue(any("already used" in l for l in lines))
@@ -182,7 +229,9 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(G.load_config(p), {})
 
     def test_default_path_is_per_user(self):
-        self.assertTrue(G.default_path().replace("\\", "/").endswith("bluehour/gamepad.json"))
+        self.assertTrue(
+            G.default_path().replace("\\", "/").endswith("bluehour/gamepad.json")
+        )
 
 
 if __name__ == "__main__":

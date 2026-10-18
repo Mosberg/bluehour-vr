@@ -19,3 +19,4 @@ gamepad.json
 .DS_Store
 Thumbs.db
 _site/
+/.docs

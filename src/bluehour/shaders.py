@@ -1,5 +1,6 @@
-"""GLSL sources: video quad, eye renderer (projections, stereo, lens distortion), present pass.
-"""
+"""GLSL sources: video quad, eye renderer (projections, stereo, lens distortion), present pass."""
+
+from __future__ import annotations
 
 # --------------------------------------------------------------------------------------
 # Shaders

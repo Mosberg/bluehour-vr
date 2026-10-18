@@ -1,5 +1,5 @@
-"""Head and position trackers: DK2 IMU, DK2 IR camera, Wii Remote IR camera, mouse fallback.
-"""
+"""Head and position trackers: DK2 IMU, DK2 IR camera, Wii Remote IR camera, mouse fallback."""
+
 import math
 import struct
 import sys
@@ -14,8 +14,10 @@ from .quat import IDENTITY, UP, q_axis, q_mul, q_norm, q_rot, q_yaw
 # Head trackers
 # --------------------------------------------------------------------------------------
 
+
 class MouseTracker:
     """Mouse-look fallback (also handy for testing without the headset)."""
+
     name = "mouse"
 
     def __init__(self):
@@ -65,11 +67,13 @@ def parse_axis_map(text):
 
 class DK2Tracker:
     """Reads the DK2 IMU over USB HID and fuses gyro + accelerometer into an orientation."""
+
     name = "dk2"
     VID, PID = 0x2833, 0x0021
 
     def __init__(self, axis_map="x,y,z", debug=False, enable_leds=True):
         import hid  # pip install hidapi
+
         self.hid = hid
         self.dev = hid.device()
         self.dev.open(self.VID, self.PID)
@@ -107,8 +111,9 @@ class DK2Tracker:
 
     def _keepalive(self):
         # feature report 0x11: [id, command_id(2), keepalive_ms(2)]
+        # Asks the headset to keep its panel on (screen does not time out).
         try:
-            self.dev.send_feature_report(bytes([0x11, 0, 0]) + struct.pack("<H", 10000))
+            self.dev.send_feature_report(bytes([0x11, 0, 0]) + struct.pack("<H", 5000))
         except Exception as exc:  # noqa: BLE001
             if self.debug:
                 print("keepalive failed:", exc)
@@ -159,12 +164,15 @@ class DK2Tracker:
             dt = min(0.01, max(0.0002, dt_total / max(num, 1)))
             for i in range(n):
                 off = 12 + 16 * i
-                accel = self._remap(unpack21(raw[off:off + 8]) * 1e-4)
-                gyro = self._remap(unpack21(raw[off + 8:off + 16]) * 1e-4)
+                accel = self._remap(unpack21(raw[off : off + 8]) * 1e-4)
+                gyro = self._remap(unpack21(raw[off + 8 : off + 16]) * 1e-4)
                 self._integrate(gyro, accel, dt)
             self.packets += 1
             if self.debug and self.packets % 75 == 0:
-                print("dk2 packets=%d  yaw=%.1f deg" % (self.packets, math.degrees(q_yaw(self.q))))
+                print(
+                    "dk2 packets=%d  yaw=%.1f deg"
+                    % (self.packets, math.degrees(q_yaw(self.q)))
+                )
 
     def orientation(self):
         with self.lock:
@@ -206,8 +214,10 @@ class OneEuro:
             self.t, self.x, self.dx = t, x.copy(), np.zeros_like(x)
             return self.x
         dt = max(1e-3, t - self.t)
-        self.dx = self._alpha(self.dcutoff, dt) * ((x - self.x) / dt) + \
-            (1.0 - self._alpha(self.dcutoff, dt)) * self.dx
+        self.dx = (
+            self._alpha(self.dcutoff, dt) * ((x - self.x) / dt)
+            + (1.0 - self._alpha(self.dcutoff, dt)) * self.dx
+        )
         a = self._alpha(self.mincutoff + self.beta * float(np.linalg.norm(self.dx)), dt)
         self.x = a * x + (1.0 - a) * self.x
         self.t = t
@@ -226,12 +236,23 @@ class CameraTracker:
     Position is reported in metres relative to the pose at the last recenter, in view-space axes
     (x right, y up, z back toward the user; moving toward the screen/camera gives negative z).
     """
+
     name = "camera"
     SIZE = (752, 480)
 
-    def __init__(self, index=None, hfov=74.0, distance=1.0, threshold=180, min_blobs=4,
-                 axis_map="x,y,z", debug=False, autostart=True):
+    def __init__(
+        self,
+        index=None,
+        hfov=74.0,
+        distance=1.0,
+        threshold=180,
+        min_blobs=4,
+        axis_map="x,y,z",
+        debug=False,
+        autostart=True,
+    ):
         import cv2  # pip install opencv-python
+
         self.cv2 = cv2
         self.debug = debug
         self.threshold = threshold
@@ -248,7 +269,7 @@ class CameraTracker:
         self.f_xy = OneEuro(mincutoff=1.5, beta=10.0)
         self.f_z = OneEuro(mincutoff=0.5, beta=4.0)
         self.pos = np.zeros(3)
-        self.ref = None          # (X0, Y0) in metres at the reference pose
+        self.ref = None  # (X0, Y0) in metres at the reference pose
         self.ref_sy = None
         self.need_ref = True
         self.last_ok = 0.0
@@ -275,8 +296,10 @@ class CameraTracker:
                 if index is not None or (w, h) == self.SIZE:
                     return cap, i
             cap.release()
-        raise RuntimeError("DK2 camera not found (it should appear as a 752x480 camera; "
-                           "see --list-cameras and --camera N)")
+        raise RuntimeError(
+            "DK2 camera not found (it should appear as a 752x480 camera; "
+            "see --list-cameras and --camera N)"
+        )
 
     # -- image processing -------------------------------------------------------------
     def detect(self, frame):
@@ -303,7 +326,9 @@ class CameraTracker:
     def _xyz(self, cx, cy, sy):
         """Metric position (camera frame, before referencing) from a measurement."""
         z = self.distance * self.ref_sy / sy
-        x = -((cx - self.w / 2.0) / self.f) * z   # user's right = image left (camera faces the user)
+        x = (
+            -((cx - self.w / 2.0) / self.f) * z
+        )  # user's right = image left (camera faces the user)
         y = -((cy - self.h / 2.0) / self.f) * z
         return x, y, z
 
@@ -315,6 +340,8 @@ class CameraTracker:
             return None, pts
         cx, cy, sy = meas
         now = time.time()
+        # Compute raw values outside the lock; only update shared state inside it.
+        x, y, z = self._xyz(cx, cy, sy)
         with self.lock:
             if self.need_ref or self.ref_sy is None:
                 self.ref_sy = sy
@@ -323,7 +350,6 @@ class CameraTracker:
                 self.need_ref = False
                 self.f_xy.reset()
                 self.f_z.reset()
-            x, y, z = self._xyz(cx, cy, sy)
             xy = self.f_xy(np.array([x - self.ref[0], y - self.ref[1]]), now)
             zz = self.f_z(np.array([z - self.distance]), now)
             raw = np.array([xy[0], xy[1], zz[0]])
@@ -339,7 +365,11 @@ class CameraTracker:
                 continue
             self.step(frame)
             if self.debug and self.frames % 120 == 0:
-                print("camera frames=%d healthy=%s pos=%s" % (self.frames, self.healthy(), np.round(self.pos, 3)))
+                pos = self.position()
+                print(
+                    "camera frames=%d healthy=%s pos=%s"
+                    % (self.frames, self.healthy(), np.round(pos, 3))
+                )
 
     # -- public API -------------------------------------------------------------------
     def healthy(self):
@@ -365,6 +395,7 @@ class CameraTracker:
 
 def list_cameras():
     import cv2
+
     backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
     found = False
     for i in range(10):
@@ -373,7 +404,11 @@ def list_cameras():
             ok, frame = cap.read()
             if ok and frame is not None:
                 h, w = frame.shape[:2]
-                tag = "   <- looks like the DK2 camera" if (w, h) == CameraTracker.SIZE else ""
+                tag = (
+                    "   <- looks like the DK2 camera"
+                    if (w, h) == CameraTracker.SIZE
+                    else ""
+                )
                 print("camera %d: %dx%d%s" % (i, w, h, tag))
                 found = True
         cap.release()
@@ -384,9 +419,20 @@ def list_cameras():
 def camera_test(args):
     """Stand-alone preview of the camera tracker (no OpenGL / mpv needed)."""
     import cv2
-    cam = CameraTracker(args.camera, args.cam_fov, args.cam_distance, args.cam_threshold,
-                        axis_map=args.cam_axis_map, debug=args.debug, autostart=False)
-    print("Camera test on camera %d (%dx%d). Keys: R = recenter, Q/Esc = quit." % (cam.index, cam.w, cam.h))
+
+    cam = CameraTracker(
+        args.camera,
+        args.cam_fov,
+        args.cam_distance,
+        args.cam_threshold,
+        axis_map=args.cam_axis_map,
+        debug=args.debug,
+        autostart=False,
+    )
+    print(
+        "Camera test on camera %d (%dx%d). Keys: R = recenter, Q/Esc = quit."
+        % (cam.index, cam.w, cam.h)
+    )
     last_print = 0.0
     while True:
         ok, frame = cam.cap.read()
@@ -396,8 +442,14 @@ def camera_test(args):
         view = frame if frame.ndim == 3 else cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
         for p in pts:
             cv2.circle(view, (int(p[0]), int(p[1])), 6, (0, 255, 0), 1)
-        label = "no LEDs found" if pos is None else "x %+.3f  y %+.3f  z %+.3f m" % tuple(pos)
-        cv2.putText(view, label, (10, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+        label = (
+            "no LEDs found"
+            if pos is None
+            else "x %+.3f  y %+.3f  z %+.3f m" % tuple(pos)
+        )
+        cv2.putText(
+            view, label, (10, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2
+        )
         cv2.imshow("DK2 camera test", view)
         if time.time() - last_print > 0.5:
             print(label + "   blobs=%d" % len(pts))
@@ -419,6 +471,7 @@ class WiiPosition:
     the four brightest points are reported and the DK2's ~40 LEDs merge into a few blobs, this is
     noisier than the DK2 camera. Same output convention as CameraTracker.
     """
+
     name = "wii"
     W, H = 1024, 768
 
@@ -460,8 +513,12 @@ class WiiPosition:
             self.f_xy.reset()
             self.f_z.reset()
         if self.ref_sy is None and have_sy:
-            self.ref_sy = sy                    # first usable spread becomes the distance reference
-        z = self.distance * self.ref_sy / sy if (have_sy and self.ref_sy) else self.last_z
+            self.ref_sy = sy  # first usable spread becomes the distance reference
+        z = (
+            self.distance * self.ref_sy / sy
+            if (have_sy and self.ref_sy)
+            else self.last_z
+        )
         self.last_z = z
         x, y = self._xy(cx, cy, z)
         now = time.time()
@@ -493,6 +550,7 @@ def setup_wiimotes(args):
         return None, None
     try:
         from .wiimote import Wiimote
+
         paths = Wiimote.find()
     except Exception as exc:  # noqa: BLE001
         if mode != "auto":
@@ -513,15 +571,21 @@ def setup_wiimotes(args):
         ctl_path = paths[0]
         cam_path = paths[1] if len(paths) > 1 else None
         if cam_path is None:
-            print("Only one Wii Remote found: using it as the controller (the camera role needs a second one).")
+            print(
+                "Only one Wii Remote found: using it as the controller (the camera role needs a second one)."
+            )
     ctl = cam = None
     try:
         if ctl_path is not None:
             ctl = Wiimote(ctl_path, led=1, ir=False, debug=args.debug)
             print("Wii Remote controller connected (LED 1)")
         if cam_path is not None:
-            cam = Wiimote(cam_path, led=4, ir=True, ir_level=args.wii_ir_level, debug=args.debug)
-            print("Wii Remote IR camera connected (LED 4): stand it on the monitor facing you, A button up")
+            cam = Wiimote(
+                cam_path, led=4, ir=True, ir_level=args.wii_ir_level, debug=args.debug
+            )
+            print(
+                "Wii Remote IR camera connected (LED 4): stand it on the monitor facing you, A button up"
+            )
     except Exception as exc:  # noqa: BLE001
         print("Wii Remote failed to start: %s" % exc)
     return ctl, cam
@@ -531,10 +595,18 @@ def wii_test(args):
     """Stand-alone Wii Remote check: shows buttons, IR points and the computed position."""
     ctl, cam = setup_wiimotes(args)
     if ctl is None and cam is None:
-        raise SystemExit("No Wii Remote could be opened. See README section 7 (pairing).")
-    pos = WiiPosition(cam, args.wii_fov, args.wii_distance, args.wii_axis_map) if cam else None
-    print("Wii test. Controller buttons are printed; press A on the controller to recenter the position. "
-          "Ctrl+C quits.")
+        raise SystemExit(
+            "No Wii Remote could be opened. See README section 7 (pairing)."
+        )
+    pos = (
+        WiiPosition(cam, args.wii_fov, args.wii_distance, args.wii_axis_map)
+        if cam
+        else None
+    )
+    print(
+        "Wii test. Controller buttons are printed; press A on the controller to recenter the position. "
+        "Ctrl+C quits."
+    )
     last = 0.0
     try:
         while True:
@@ -547,8 +619,16 @@ def wii_test(args):
             if pos is not None and time.time() - last > 0.5:
                 pts, _ = cam.ir_snapshot()
                 p = pos.position()
-                print("IR points: %s   position x %+.3f y %+.3f z %+.3f m   %s" % (
-                    pts if pts else "none", p[0], p[1], p[2], "" if pos.healthy() else "(no recent IR data)"))
+                print(
+                    "IR points: %s   position x %+.3f y %+.3f z %+.3f m   %s"
+                    % (
+                        pts if pts else "none",
+                        p[0],
+                        p[1],
+                        p[2],
+                        "" if pos.healthy() else "(no recent IR data)",
+                    )
+                )
                 last = time.time()
             time.sleep(0.01)
     except KeyboardInterrupt:

@@ -4,6 +4,9 @@ Run it with `bluehour-gui` (or `python -m bluehour.webui`). It listens on 127.0.
 random token that is part of the address it opens, and requests with a foreign Host or Origin header are refused,
 so other web pages cannot drive it. Standard library only.
 """
+
+from __future__ import annotations
+
 import argparse
 import collections
 import hmac
@@ -17,21 +20,111 @@ import sys
 import threading
 import time
 import webbrowser
+import base64
+import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 from urllib.parse import parse_qs, urlparse
 
 from . import __version__, control, settings
 from .paths import config_dir, python_args
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "webui")
-STATIC_FILES = {"index.html": "text/html; charset=utf-8", "app.js": "text/javascript; charset=utf-8",
-                "app.css": "text/css; charset=utf-8", "logo-dark.svg": "image/svg+xml", "logo.svg": "image/svg+xml",
-                "favicon.svg": "image/svg+xml", "icon.svg": "image/svg+xml"}
-MEDIA_EXT = {".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v", ".wmv", ".flv", ".ts", ".m2ts", ".mpg", ".mpeg",
-             ".ogv", ".3gp", ".vob", ".iso", ".mp3", ".flac", ".wav", ".m3u", ".m3u8"}
+STATIC_FILES = {
+    "index.html": "text/html; charset=utf-8",
+    "app.js": "text/javascript; charset=utf-8",
+    "app.css": "text/css; charset=utf-8",
+    "logo-dark.svg": "image/svg+xml",
+    "logo.svg": "image/svg+xml",
+    "favicon.svg": "image/svg+xml",
+    "icon.svg": "image/svg+xml",
+}
+MEDIA_EXT = {
+    ".mp4",
+    ".mkv",
+    ".webm",
+    ".mov",
+    ".avi",
+    ".m4v",
+    ".wmv",
+    ".flv",
+    ".ts",
+    ".m2ts",
+    ".mpg",
+    ".mpeg",
+    ".ogv",
+    ".3gp",
+    ".vob",
+    ".iso",
+    ".mp3",
+    ".flac",
+    ".wav",
+    ".m3u",
+    ".m3u8",
+}
 URL_RE = re.compile(r"^(https?|rtsp|rtmp|mms)://\S+$", re.I)
-SPEC_RE = re.compile(r"^(gp|button):\d{1,3}$|^hat:\d{1,2}:(1|2|4|8)$|^axis:\d{1,3}:[+-]$")
+SPEC_RE = re.compile(
+    r"^(gp|button):\d{1,3}$|^hat:\d{1,2}:(1|2|4|8)$|^axis:\d{1,3}:[+-]$"
+)
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
+# ---------------------------------------------------------------------------------------------
+# minimal WebSocket (RFC 6455) support for real-time state updates
+# ---------------------------------------------------------------------------------------------
+
+WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
+
+def ws_accept_key(key: str) -> str:
+    return base64.b64encode(hashlib.sha1((key + WS_GUID).encode()).digest()).decode()
+
+
+class WSFrame:
+    """Tiny WebSocket text-frame encoder/decoder (client -> server + server -> client)."""
+
+    @staticmethod
+    def encode_text(text: str) -> bytes:
+        payload = text.encode("utf-8")
+        header = bytearray()
+        header.append(0x81)  # FIN + text opcode
+        if len(payload) <= 125:
+            header.append(len(payload))
+        elif len(payload) <= 65535:
+            header.append(126)
+            header += len(payload).to_bytes(2, "big")
+        else:
+            header.append(127)
+            header += len(payload).to_bytes(8, "big")
+        return bytes(header) + payload
+
+    @staticmethod
+    def read_frame(rfile) -> Optional[str]:
+        """Read one WebSocket frame. Returns the text payload or None on close."""
+        b1 = rfile.read(1)
+        if not b1 or len(b1) < 1:
+            return None
+        b1 = b1[0]
+        fin = bool(b1 & 0x80)
+        opcode = b1 & 0x0F
+        if not fin or opcode == 8:  # close frame
+            return None
+        b2 = rfile.read(1)
+        if not b2:
+            return None
+        masked = bool(b2 & 0x80)
+        length = b2 & 0x7F
+        if length == 126:
+            length = int.from_bytes(rfile.read(2), "big")
+        elif length == 127:
+            length = int.from_bytes(rfile.read(8), "big")
+        mask = rfile.read(4) if masked else b"\x00\x00\x00\x00"
+        payload = rfile.read(length) if length else b""
+        if masked:
+            payload = bytes(c ^ mask[i % 4] for i, c in enumerate(payload))
+        if opcode == 1:
+            return payload.decode("utf-8", errors="replace")
+        return ""  # ping/pong etc.
 
 
 class ApiError(Exception):
@@ -43,18 +136,26 @@ class ApiError(Exception):
 class Runner:
     """Owns the player process and one helper-tool process, their output, and the player's last reported state."""
 
-    def __init__(self, command_prefix=None, log_size=1000):
+    def __init__(
+        self,
+        command_prefix: Optional[List[str]] = None,
+        log_size: int = 1000,
+        on_state_change: Optional[Callable[[Dict[str, Any], float], None]] = None,
+    ):
         self.prefix = list(command_prefix or python_args())
         self.lock = threading.Lock()
-        self.log = collections.deque(maxlen=log_size)
+        self.log: "collections.deque[Dict[str, Any]]" = collections.deque(
+            maxlen=log_size
+        )
         self.seq = 0
-        self.player = None
-        self.tool = None
-        self.tool_name = None
-        self.player_state = None
-        self.player_state_time = 0.0
-        self.last_exit = {}
-        self.doctor = None
+        self.player: Optional[subprocess.Popen[str]] = None
+        self.tool: Optional[subprocess.Popen[str]] = None
+        self.tool_name: Optional[str] = None
+        self.player_state: Optional[Dict[str, Any]] = None
+        self.player_state_time: float = 0.0
+        self.last_exit: Dict[str, int] = {}
+        self.doctor: Optional[List[Dict[str, Any]]] = None
+        self.on_state_change = on_state_change
 
     # ---- output ----
     def _add(self, src, text):
@@ -70,10 +171,13 @@ class Runner:
                 if state is not None:
                     with self.lock:
                         self.player_state, self.player_state_time = state, time.time()
+                    cb = self.on_state_change
+                    if cb:
+                        cb(dict(state), time.time())
                     continue
             elif line.startswith("@doctor "):
                 try:
-                    self.doctor = json.loads(line[len("@doctor "):])
+                    self.doctor = json.loads(line[len("@doctor ") :])
                 except ValueError:
                     pass
                 continue
@@ -86,13 +190,25 @@ class Runner:
                 self.player_state = None
             if src == "tool" and self.tool is proc:
                 self.tool = None
-        self._add("system", "%s exited with code %s" % ("Player" if src == "player" else "Tool", code))
+        self._add(
+            "system",
+            "%s exited with code %s" % ("Player" if src == "player" else "Tool", code),
+        )
 
     def _spawn(self, argv, src):
         env = dict(os.environ, PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8")
-        proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                text=True, encoding="utf-8", errors="replace", bufsize=1, env=env,
-                                creationflags=NO_WINDOW)
+        proc = subprocess.Popen(
+            argv,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+            env=env,
+            creationflags=NO_WINDOW,
+        )
         threading.Thread(target=self._pump, args=(proc, src), daemon=True).start()
         return proc
 
@@ -104,7 +220,7 @@ class Runner:
         if self.player_running():
             raise ApiError("The player is already running.", 409)
         argv = self.prefix + settings.to_argv(values, files, control=True)
-        self._add("system", "Starting: bluehour " + " ".join(argv[len(self.prefix):]))
+        self._add("system", "Starting: bluehour " + " ".join(argv[len(self.prefix) :]))
         with self.lock:
             self.player_state = None
         self.player = self._spawn(argv, "player")
@@ -152,7 +268,7 @@ class Runner:
             raise ApiError("Another tool is still running. Stop it first.", 409)
         flag = settings.TOOLS[tool_id][0]
         argv = self.prefix + [flag] + settings.to_argv(values, (), control=False)
-        self._add("system", "Running: bluehour " + " ".join(argv[len(self.prefix):]))
+        self._add("system", "Running: bluehour " + " ".join(argv[len(self.prefix) :]))
         if tool_id == "doctor":
             self.doctor = None
         self.tool_name = tool_id
@@ -172,8 +288,16 @@ class Runner:
         flag = settings.TOOLS[tool_id][0]
         argv = self.prefix + [flag] + settings.to_argv(values, (), control=False)
         try:
-            done = subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                                  timeout=timeout, creationflags=NO_WINDOW, stdin=subprocess.DEVNULL)
+            done = subprocess.run(
+                argv,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                creationflags=NO_WINDOW,
+                stdin=subprocess.DEVNULL,
+            )
         except subprocess.TimeoutExpired:
             raise ApiError("That took too long and was stopped.", 504) from None
         return (done.stdout + done.stderr).splitlines(), done.returncode
@@ -188,19 +312,31 @@ class Runner:
             log = [e for e in self.log if e["n"] > since]
             state = dict(self.player_state) if self.player_state else None
             age = time.time() - self.player_state_time if state else None
-            return {"player_running": self.player_running(), "tool_running": self.tool_running(),
-                    "tool": self.tool_name if self.tool_running() else None, "player_state": state,
-                    "player_state_age": age, "log": log, "log_seq": self.seq, "doctor": self.doctor,
-                    "last_exit": dict(self.last_exit)}
+            return {
+                "player_running": self.player_running(),
+                "tool_running": self.tool_running(),
+                "tool": self.tool_name if self.tool_running() else None,
+                "player_state": state,
+                "player_state_age": age,
+                "log": log,
+                "log_seq": self.seq,
+                "doctor": self.doctor,
+                "last_exit": dict(self.last_exit),
+            }
 
 
 # ---------------------------------------------------------------------------------------------
 # file browsing
 # ---------------------------------------------------------------------------------------------
 
+
 def list_roots():
     if os.name == "nt":
-        return ["%s:\\" % c for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" if os.path.exists("%s:\\" % c)]
+        return [
+            "%s:\\" % c
+            for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            if os.path.exists("%s:\\" % c)
+        ]
     return ["/"]
 
 
@@ -226,14 +362,26 @@ def browse(path):
                 except OSError:
                     continue
                 ext = os.path.splitext(e.name)[1].lower()
-                entries.append({"name": e.name, "dir": is_dir, "size": size,
-                                "media": (not is_dir) and ext in MEDIA_EXT})
+                entries.append(
+                    {
+                        "name": e.name,
+                        "dir": is_dir,
+                        "size": size,
+                        "media": (not is_dir) and ext in MEDIA_EXT,
+                    }
+                )
     except PermissionError:
         raise ApiError("You do not have permission to open that folder.", 403) from None
     entries.sort(key=lambda x: (not x["dir"], x["name"].lower()))
     parent = os.path.dirname(path)
-    return {"path": path, "parent": parent if parent != path else None, "home": home, "roots": list_roots(),
-            "sep": os.sep, "entries": entries[:5000]}
+    return {
+        "path": path,
+        "parent": parent if parent != path else None,
+        "home": home,
+        "roots": list_roots(),
+        "sep": os.sep,
+        "entries": entries[:5000],
+    }
 
 
 def check_files(files):
@@ -250,7 +398,11 @@ def check_files(files):
         else:
             missing.append(f)
     if missing:
-        raise ApiError("Not found: " + ", ".join(missing[:3]) + (" and more" if len(missing) > 3 else ""))
+        raise ApiError(
+            "Not found: "
+            + ", ".join(missing[:3])
+            + (" and more" if len(missing) > 3 else "")
+        )
     return out
 
 
@@ -258,27 +410,67 @@ def check_files(files):
 # HTTP
 # ---------------------------------------------------------------------------------------------
 
+
 class App:
     """Everything the handlers need, so tests can build a server with a fake player."""
 
-    def __init__(self, runner=None, state_file=None, gamepad_file=None, token=None):
-        self.runner = runner or Runner()
+    def __init__(
+        self,
+        runner: Optional[Runner] = None,
+        state_file: Optional[str] = None,
+        gamepad_file: Optional[str] = None,
+        token: Optional[str] = None,
+    ):
+        self.runner = runner or Runner(on_state_change=self._on_state_change)
         self.state_file = state_file or settings.state_path()
         self.gamepad_file = gamepad_file
         self.token = token or secrets.token_urlsafe(24)
-        self.state = settings.load_state(self.state_file)
+        self.state: Dict[str, Any] = settings.load_state(self.state_file)
         self.lock = threading.Lock()
         self.shutdown_event = threading.Event()
+        self._ws_clients: Set[WSHandler] = set()
 
-    def save(self):
+    def _on_state_change(self, state: Dict[str, Any], t: float) -> None:
+        """Called by Runner when the player reports new state: broadcast to all WS clients."""
+        clients = []
+        with self.lock:
+            clients = list(self._ws_clients)
+        if not clients:
+            return
+        msg = {
+            "type": "state",
+            "player_state": state,
+            "player_state_age": 0.0,
+            "player_running": self.runner.player_running(),
+            "tool_running": self.runner.tool_running(),
+            "tool": self.runner.tool_name if self.runner.tool_running() else None,
+        }
+        data = json.dumps(msg).encode("utf-8")
+        dead = []
+        for ws in clients:
+            try:
+                ws.send_frame(data)
+            except (OSError, BrokenPipeError, ConnectionError):
+                dead.append(ws)
+        if dead:
+            with self.lock:
+                for ws in dead:
+                    self._ws_clients.discard(ws)
+
+    def save(self) -> None:
         settings.save_state(self.state, self.state_file)
 
-    def gamepad_path(self):
+    def gamepad_path(self) -> str:
         from . import gamepad
-        return self.gamepad_file or self.state["settings"].get("pad_file") or gamepad.default_path()
+
+        return (
+            self.gamepad_file
+            or self.state["settings"].get("pad_file")
+            or gamepad.default_path()
+        )
 
 
-def json_body(handler):
+def json_body(handler: BaseHTTPRequestHandler) -> Dict[str, Any]:
     length = int(handler.headers.get("Content-Length") or 0)
     if length > 2_000_000:
         raise ApiError("That request is too large.", 413)
@@ -292,7 +484,7 @@ def json_body(handler):
     return data
 
 
-def api_get(app, path, query):
+def api_get(app: App, path: str, query: Dict[str, List[str]]) -> Dict[str, Any]:
     r = app.runner
     if path == "/api/schema":
         data = settings.schema()
@@ -302,8 +494,11 @@ def api_get(app, path, query):
     if path == "/api/state":
         since = int(query.get("since", ["0"])[0] or 0)
         with app.lock:
-            out = {"settings": app.state["settings"], "playlist": app.state["playlist"],
-                   "presets": sorted(app.state["presets"])}
+            out = {
+                "settings": app.state["settings"],
+                "playlist": app.state["playlist"],
+                "presets": sorted(app.state["presets"]),
+            }
         out.update(r.snapshot(since))
         return out
     if path == "/api/fs":
@@ -312,29 +507,52 @@ def api_get(app, path, query):
         lines, _ = r.run_tool_capture("list_monitors", app.state["settings"])
         found = []
         for line in lines:
-            m = re.match(r"^(\d+): (.*?)\s+(\d+)x(\d+) @ (\d+) Hz(\s+\(primary\))?\s*$", line)
+            m = re.match(
+                r"^(\d+): (.*?)\s+(\d+)x(\d+) @ (\d+) Hz(\s+\(primary\))?\s*$", line
+            )
             if m:
-                found.append({"index": int(m.group(1)), "name": m.group(2), "width": int(m.group(3)),
-                              "height": int(m.group(4)), "hz": int(m.group(5)), "primary": bool(m.group(6))})
+                found.append(
+                    {
+                        "index": int(m.group(1)),
+                        "name": m.group(2),
+                        "width": int(m.group(3)),
+                        "height": int(m.group(4)),
+                        "hz": int(m.group(5)),
+                        "primary": bool(m.group(6)),
+                    }
+                )
         return {"monitors": found, "output": lines}
     if path == "/api/detect/cameras":
-        lines, _ = r.run_tool_capture("list_cameras", app.state["settings"], timeout=60.0)
+        lines, _ = r.run_tool_capture(
+            "list_cameras", app.state["settings"], timeout=60.0
+        )
         found = []
         for line in lines:
             m = re.match(r"^camera (\d+): (\d+)x(\d+)(.*)$", line)
             if m:
-                found.append({"index": int(m.group(1)), "width": int(m.group(2)), "height": int(m.group(3)),
-                              "dk2": "DK2" in m.group(4)})
+                found.append(
+                    {
+                        "index": int(m.group(1)),
+                        "width": int(m.group(2)),
+                        "height": int(m.group(3)),
+                        "dk2": "DK2" in m.group(4),
+                    }
+                )
         return {"cameras": found, "output": lines}
     if path == "/api/gamepad":
         from . import gamepad
+
         file = app.gamepad_path()
-        return {"file": file, "config": gamepad.load_config(file), "defaults": gamepad.DEFAULT_GAMEPAD,
-                "actions": [{"id": a, "label": gamepad.LABELS[a]} for a in gamepad.ACTIONS]}
+        return {
+            "file": file,
+            "config": gamepad.load_config(file),
+            "defaults": gamepad.DEFAULT_GAMEPAD,
+            "actions": [{"id": a, "label": gamepad.LABELS[a]} for a in gamepad.ACTIONS],
+        }
     raise ApiError("Not found.", 404)
 
 
-def api_post(app, path, body):
+def api_post(app: App, path: str, body: Dict[str, Any]) -> Dict[str, Any]:
     r = app.runner
     if path == "/api/settings":
         incoming = body.get("settings")
@@ -376,7 +594,10 @@ def api_post(app, path, body):
             else:
                 raise ApiError("action must be save, load or delete")
             app.save()
-            return {"settings": app.state["settings"], "presets": sorted(app.state["presets"])}
+            return {
+                "settings": app.state["settings"],
+                "presets": sorted(app.state["presets"]),
+            }
     if path == "/api/play":
         files = body.get("files")
         if files is None:
@@ -408,6 +629,7 @@ def api_post(app, path, body):
         return {"started": True}
     if path == "/api/gamepad":
         from . import gamepad
+
         config = body.get("config")
         if not isinstance(config, dict):
             raise ApiError("config must be an object")
@@ -418,7 +640,10 @@ def api_post(app, path, body):
                 if action not in gamepad.ACTIONS:
                     raise ApiError("Unknown action: %s" % action)
                 if not isinstance(spec, str) or not SPEC_RE.match(spec):
-                    raise ApiError("'%s' is not a valid control. Use for example button:3, hat:0:2 or axis:1:-." % spec)
+                    raise ApiError(
+                        "'%s' is not a valid control. Use for example button:3, hat:0:2 or axis:1:-."
+                        % spec
+                    )
         gamepad.save_config(app.gamepad_path(), config)
         return {"saved": True}
     if path == "/api/shutdown":
@@ -448,33 +673,62 @@ def make_handler(app):
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("X-Frame-Options", "DENY")
-            self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; "
-                             "img-src 'self' data:; script-src 'self'; connect-src 'self'; frame-ancestors 'none'")
+            self.send_header(
+                "Content-Security-Policy",
+                "default-src 'self'; style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data:; script-src 'self'; connect-src 'self'; frame-ancestors 'none'",
+            )
+            # Headers that are set by default cannot be overridden via extra.
+            protected = {
+                "content-type",
+                "content-length",
+                "x-content-type-options",
+                "referrer-policy",
+                "x-frame-options",
+                "content-security-policy",
+            }
             for k, v in (extra or {}).items():
-                self.send_header(k, v)
+                if k.lower() not in protected:
+                    self.send_header(k, v)
             self.end_headers()
             self.wfile.write(body)
 
         def _json(self, status, data):
-            self._send(status, json.dumps(data).encode("utf-8"), "application/json", {"Cache-Control": "no-store"})
+            self._send(
+                status,
+                json.dumps(data).encode("utf-8"),
+                "application/json",
+                {"Cache-Control": "no-store"},
+            )
 
         def _authorised(self, post):
             if not self._allowed_host():
                 raise ApiError("Forbidden host.", 403)
-            if not hmac.compare_digest(self.headers.get("X-Bluehour-Token", ""), app.token):
-                raise ApiError("Missing or wrong token. Open the address printed by bluehour-gui.", 401)
+            if not hmac.compare_digest(
+                self.headers.get("X-Bluehour-Token", ""), app.token
+            ):
+                raise ApiError(
+                    "Missing or wrong token. Open the address printed by bluehour-gui.",
+                    401,
+                )
             if post:
                 origin = self.headers.get("Origin")
-                if origin and origin.lower() not in ("http://127.0.0.1:%d" % self.server.server_address[1],
-                                                     "http://localhost:%d" % self.server.server_address[1]):
+                if origin and origin.lower() not in (
+                    "http://127.0.0.1:%d" % self.server.server_address[1],
+                    "http://localhost:%d" % self.server.server_address[1],
+                ):
                     raise ApiError("Forbidden origin.", 403)
-                if not (self.headers.get("Content-Type") or "").startswith("application/json"):
+                if not (self.headers.get("Content-Type") or "").startswith(
+                    "application/json"
+                ):
                     raise ApiError("Requests must be JSON.", 415)
 
         def _handle(self, post):
             url = urlparse(self.path)
             try:
-                if url.path.startswith("/api/"):
+                if url.path == "/ws":
+                    self._upgrade_ws()
+                elif url.path.startswith("/api/"):
                     self._authorised(post)
                     if post:
                         data = api_post(app, url.path, json_body(self))
@@ -487,10 +741,35 @@ def make_handler(app):
                     raise ApiError("Not found.", 404)
             except ApiError as exc:
                 self._json(exc.status, {"error": str(exc)})
-            except ValueError as exc:                       # control.parse_command and similar validation
+            except ValueError as exc:  # control.parse_command and similar validation
                 self._json(400, {"error": str(exc)})
-            except Exception as exc:  # noqa: BLE001 - never let one request kill the server
+            except (
+                Exception
+            ) as exc:  # noqa: BLE001 - never let one request kill the server
                 self._json(500, {"error": "%s: %s" % (type(exc).__name__, exc)})
+
+        def _upgrade_ws(self):
+            """Handle a WebSocket upgrade handshake."""
+            key = self.headers.get("Sec-WebSocket-Key")
+            if not key:
+                raise ApiError("Missing Sec-WebSocket-Key.", 400)
+            if not self._allowed_host():
+                raise ApiError("Forbidden host.", 403)
+            token = self.headers.get("X-Bluehour-Token", "")
+            if not hmac.compare_digest(token, app.token):
+                raise ApiError("Missing or wrong token.", 401)
+            accept = ws_accept_key(key)
+            self.send_response(101)
+            self.send_header("Upgrade", "websocket")
+            self.send_header("Connection", "upgrade")
+            self.send_header("Sec-WebSocket-Accept", accept)
+            self.end_headers()
+            ws = WSHandler(self, app)
+            app._ws_clients.add(ws)
+            try:
+                ws.run()
+            finally:
+                app._ws_clients.discard(ws)
 
         def _static(self, path):
             if not self._allowed_host():
@@ -507,6 +786,39 @@ def make_handler(app):
 
         def do_POST(self):
             self._handle(True)
+
+    class WSHandler:
+        """A single WebSocket connection: reads frames, echoes commands back as state snapshots."""
+
+        def __init__(self, handler, app):
+            self.handler = handler
+            self.app = app
+            self.rfile = handler.rfile
+            self.wfile = handler.wfile
+            self._closed = False
+
+        def send_frame(self, data: bytes) -> None:
+            self.wfile.write(data)
+            self.wfile.flush()
+
+        def send_text(self, text: str) -> None:
+            self.send_frame(WSFrame.encode_text(text))
+
+        def run(self):
+            while not self._closed:
+                try:
+                    text = WSFrame.read_frame(self.rfile)
+                except (OSError, ConnectionError, BrokenPipeError):
+                    break
+                if text is None:
+                    break  # close frame
+                try:
+                    msg = json.loads(text) if text else {}
+                except ValueError:
+                    continue
+                if isinstance(msg, dict) and msg.get("cmd") == "ping":
+                    self.send_text(json.dumps({"type": "pong"}))
+            self._closed = True
 
     return Handler
 
@@ -526,15 +838,29 @@ def make_server(app, port=0):
 
 def find_app_browser():
     """A Chrome or Edge that can open the page as a plain app window (no tabs), or None."""
-    names = ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge", "msedge"]
+    names = [
+        "google-chrome",
+        "google-chrome-stable",
+        "chromium",
+        "chromium-browser",
+        "microsoft-edge",
+        "msedge",
+    ]
     for n in names:
         path = shutil.which(n)
         if path:
             return path
     if os.name == "nt":
-        roots = [os.environ.get(k) for k in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA") if os.environ.get(k)]
+        roots = [
+            os.environ.get(k)
+            for k in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA")
+            if os.environ.get(k)
+        ]
         for root in roots:
-            for rel in (r"Google\Chrome\Application\chrome.exe", r"Microsoft\Edge\Application\msedge.exe"):
+            for rel in (
+                r"Google\Chrome\Application\chrome.exe",
+                r"Microsoft\Edge\Application\msedge.exe",
+            ):
                 path = os.path.join(root, rel)
                 if os.path.isfile(path):
                     return path
@@ -545,8 +871,12 @@ def open_window(url, app_window=True):
     exe = find_app_browser() if app_window else None
     if exe:
         try:
-            subprocess.Popen([exe, "--app=" + url, "--window-size=1180,820"],
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=NO_WINDOW)
+            subprocess.Popen(
+                [exe, "--app=" + url, "--window-size=1180,820"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=NO_WINDOW,
+            )
             return
         except OSError:
             pass
@@ -554,11 +884,22 @@ def open_window(url, app_window=True):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="bluehour-gui", description="Bluehour control panel (opens in your browser)")
-    ap.add_argument("--port", type=int, default=0, help="port to listen on (default: any free port)")
+    ap = argparse.ArgumentParser(
+        prog="bluehour-gui",
+        description="Bluehour control panel (opens in your browser)",
+    )
+    ap.add_argument(
+        "--port", type=int, default=0, help="port to listen on (default: any free port)"
+    )
     ap.add_argument("--no-browser", action="store_true", help="only print the address")
-    ap.add_argument("--tab", action="store_true", help="open in a normal browser tab instead of an app window")
-    ap.add_argument("--version", action="version", version="bluehour-gui " + __version__)
+    ap.add_argument(
+        "--tab",
+        action="store_true",
+        help="open in a normal browser tab instead of an app window",
+    )
+    ap.add_argument(
+        "--version", action="version", version="bluehour-gui " + __version__
+    )
     args = ap.parse_args(argv)
 
     os.makedirs(config_dir(), exist_ok=True)
