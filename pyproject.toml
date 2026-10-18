@@ -41,6 +41,7 @@ dev = ["ruff>=0.6", "build>=1.2"]
 
 [project.scripts]
 bluehour = "bluehour.player:main"
+bluehour-gui = "bluehour.webui:main"
 
 [project.urls]
 Homepage = "https://mosberg.github.io/bluehour-vr/"
@@ -56,7 +57,7 @@ version = { attr = "bluehour.__version__" }
 where = ["src"]
 
 [tool.setuptools.package-data]
-bluehour = ["py.typed"]
+bluehour = ["py.typed", "webui/*"]
 
 [tool.ruff]
 line-length = 120

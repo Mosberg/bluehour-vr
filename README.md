@@ -35,15 +35,18 @@ that would otherwise sit in a drawer.
 - **Lens distortion and chromatic aberration correction** for the DK2 lenses, tunable live.
 - **Head rotation** from the DK2 motion sensor over USB, with mouse look as the fallback.
 - **Leaning and moving** from the DK2 IR camera or a Wii Remote's IR camera, with a neck-model fallback. Position applies to flat and curved screens only, as VR video has no depth.
+- **Control panel.** `bluehour-gui` opens a window with every setting, a playlist, presets, live controls while you play, and setup checks.
 - **Remote control** from the keyboard, a Wii Remote, or any USB gamepad: Xbox One, PS3, or a raphnet adapter for Classic controllers, Nunchuks and guitars.
 
 ## Quick start
 
-You need Python 3.9 or newer and libmpv. On Windows, put `libmpv-2.dll` in the folder you run Bluehour from.
+You need Python 3.9 or newer and libmpv. On Windows, see the [setup guide](docs/setup.md) for the one DLL you need.
 On Debian or Ubuntu, `sudo apt install libmpv2`.
 
 ```bash
 pip install git+https://github.com/Mosberg/bluehour-vr.git
+bluehour-gui                      # control panel: every setting, no commands needed
+bluehour --doctor                 # check your setup
 bluehour --list-monitors          # find the DK2
 bluehour movie.mp4                # flat movie
 bluehour movie_sbs.mp4            # 3D, guessed from the name
@@ -55,23 +58,24 @@ Set the DK2 up as an extended monitor at 1920x1080, 75 Hz first. The [setup guid
 
 ## Documentation
 
-| Guide                                                 | What it covers                                        |
-| ----------------------------------------------------- | ----------------------------------------------------- |
-| [Set up](docs/setup.md)                               | Install, libmpv, the DK2 display, Linux udev rules    |
-| [Use](docs/usage.md)                                  | Commands, layouts, the full keyboard table            |
+| Guide | What it covers |
+|---|---|
+| [Set up](docs/setup.md) | Install, libmpv, the DK2 display, Linux udev rules |
+| [Control panel](docs/gui.md) | The window with every setting, the playlist and live controls |
+| [Use](docs/usage.md) | Commands, layouts, the full keyboard table |
 | [Troubleshooting and limits](docs/troubleshooting.md) | Tracking direction, distortion, stutter, known limits |
-| [Leaning and moving](docs/position-tracking.md)       | DK2 camera and neck model                             |
-| [Wii Remote](docs/wii-remote.md)                      | Remote control and IR camera, pairing                 |
-| [USB gamepads](docs/gamepads.md)                      | Xbox One, PS3, raphnet adapter, learn mode            |
-| [Architecture](docs/architecture.md)                  | How the pieces fit, for contributors                  |
-| [Hardware test checklist](docs/hardware-testing.md)   | Report what works on your DK2                         |
+| [Leaning and moving](docs/position-tracking.md) | DK2 camera and neck model |
+| [Wii Remote](docs/wii-remote.md) | Remote control and IR camera, pairing |
+| [USB gamepads](docs/gamepads.md) | Xbox One, PS3, raphnet adapter, learn mode |
+| [Architecture](docs/architecture.md) | How the pieces fit, for contributors |
+| [Hardware test checklist](docs/hardware-testing.md) | Report what works on your DK2 |
 
 The same guides are published at **<https://mosberg.github.io/bluehour-vr/>**.
 
 ## Project layout
 
 ```text
-src/bluehour/     the package: player, tracking, shaders, quaternion maths, Wii Remote, gamepads
+src/bluehour/     the package: player, control panel (webui), settings, tracking, shaders, Wii Remote, gamepads
 tests/            unit tests (standard library unittest, no hardware needed)
 docs/             guides and the GitHub Pages site
 assets/brand/     logo, icon and social preview

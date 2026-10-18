@@ -17,6 +17,7 @@ BASE = "https://mosberg.github.io/bluehour-vr/"
 REPO = "https://github.com/Mosberg/bluehour-vr/blob/main/"
 GUIDES = [
     ("setup", "Set up"),
+    ("gui", "Control panel"),
     ("usage", "Use"),
     ("troubleshooting", "Troubleshooting and limits"),
     ("position-tracking", "Leaning and moving"),

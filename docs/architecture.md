@@ -42,3 +42,13 @@ Pure logic is unit-tested without hardware: quaternion maths, sensor unpacking, 
 guessing, Wii Remote report parsing with a fake device, and the gamepad mapping with a fake backend. Code that needs a
 window, a GPU or a device (shaders, render loop, real HID I/O) cannot run in CI and is covered by the
 [hardware test checklist](hardware-testing.md).
+
+## Control panel
+
+- `settings.py` holds one table of every option (`FIELDS`). The command line parser, the panel's controls, argument
+  building and validation all come from it, and `tests/test_settings.py` fails if a command line option has no field.
+- `webui.py` is a small local web server (standard library only, 127.0.0.1, random port, private token). It starts the
+  player and helper tools as subprocesses, never through a shell.
+- `control.py` is the protocol with a running player: JSON commands on stdin, `@state {...}` lines on stdout.
+- `webui/` holds the page (`index.html`, `app.js`, `app.css`). It builds its controls from `/api/schema`.
+- `doctor.py` runs the setup checks for `--doctor` and the panel.

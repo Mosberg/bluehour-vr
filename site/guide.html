@@ -1,63 +1,47 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{title}} | Bluehour</title>
-    <meta name="description" content="{{description}}" />
-    <meta name="theme-color" content="#0a1230" />
-    <link
-      rel="canonical"
-      href="https://mosberg.github.io/bluehour-vr/guides/{{slug}}.html"
-    />
-    <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml" />
-    <link rel="icon" href="../assets/favicon.ico" sizes="any" />
-    <meta property="og:title" content="{{title}} | Bluehour" />
-    <meta property="og:description" content="{{description}}" />
-    <meta
-      property="og:image"
-      content="https://mosberg.github.io/bluehour-vr/assets/social-preview.png"
-    />
-    <meta name="twitter:card" content="summary_large_image" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,400..800&display=swap"
-    />
-    <link rel="stylesheet" href="../style.css" />
-  </head>
-  <body>
-    <a class="skip" href="#main">Skip to content</a>
-    <header class="guide-head">
-      <div class="wrap">
-        <div class="topbar">
-          <a href="../index.html"
-            ><img src="../assets/logo-dark.svg" alt="Bluehour home"
-          /></a>
-          <nav aria-label="Main">
-            <a href="https://github.com/Mosberg/bluehour-vr">GitHub</a>
-          </nav>
-        </div>
-      </div>
-    </header>
-    <div class="wrap guide-layout">
-      <nav class="side" aria-label="Guides">
-        <ul>
-          {{nav}}
-        </ul>
-      </nav>
-      <main id="main" class="prose">{{content}}</main>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{title}} | Bluehour</title>
+<meta name="description" content="{{description}}">
+<meta name="theme-color" content="#0a1230">
+<link rel="canonical" href="https://mosberg.github.io/bluehour-vr/guides/{{slug}}.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../assets/favicon.ico" sizes="any">
+<meta property="og:title" content="{{title}} | Bluehour">
+<meta property="og:description" content="{{description}}">
+<meta property="og:image" content="https://mosberg.github.io/bluehour-vr/assets/social-preview.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,400..800&display=swap">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="guide-head">
+  <div class="wrap">
+    <div class="topbar">
+      <a href="../index.html"><img src="../assets/logo-dark.svg" alt="Bluehour home"></a>
+      <nav aria-label="Main"><a href="https://github.com/Mosberg/bluehour-vr">GitHub</a></nav>
     </div>
-    <footer>
-      <div class="wrap">
-        <p>
-          <a
-            href="https://github.com/Mosberg/bluehour-vr/edit/main/docs/{{slug}}.md"
-            >Edit this page on GitHub</a
-          >. Bluehour is MIT licensed.
-        </p>
-      </div>
-    </footer>
-  </body>
+  </div>
+</header>
+<div class="wrap guide-layout">
+  <nav class="side" aria-label="Guides">
+    <ul>
+{{nav}}
+    </ul>
+  </nav>
+  <main id="main" class="prose">
+{{content}}
+  </main>
+</div>
+<footer>
+  <div class="wrap">
+    <p><a href="https://github.com/Mosberg/bluehour-vr/edit/main/docs/{{slug}}.md">Edit this page on GitHub</a>. Bluehour is MIT licensed.</p>
+  </div>
+</footer>
+</body>
 </html>

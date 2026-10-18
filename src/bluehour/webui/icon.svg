@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Bluehour">
+  <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0E1A52"/><stop offset=".45" stop-color="#2E3F95"/>
+      <stop offset=".72" stop-color="#C9648F"/><stop offset="1" stop-color="#F6A85E"/></linearGradient></defs>
+  <rect width="512" height="512" rx="112" fill="#0A1230"/>
+  <clipPath id="c0"><circle cx="148" cy="256" r="104"/></clipPath>
+<g clip-path="url(#c0)"><rect x="44" y="152" width="208" height="208" fill="url(#sky)"/><rect x="44" y="278.88" width="208" height="7.280000000000001" fill="#FFE2B8"/><rect x="44" y="286.15999999999997" width="208" height="104" fill="#0A1230" opacity=".82"/></g>
+<circle cx="148" cy="256" r="104" fill="none" stroke="#E9EEFF" stroke-width="14"/>
+<clipPath id="c1"><circle cx="364" cy="256" r="104"/></clipPath>
+<g clip-path="url(#c1)"><rect x="260" y="152" width="208" height="208" fill="url(#sky)"/><rect x="260" y="278.88" width="208" height="7.280000000000001" fill="#FFE2B8"/><rect x="260" y="286.15999999999997" width="208" height="104" fill="#0A1230" opacity=".82"/></g>
+<circle cx="364" cy="256" r="104" fill="none" stroke="#E9EEFF" stroke-width="14"/>
+</svg>

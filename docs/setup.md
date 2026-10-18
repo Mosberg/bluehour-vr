@@ -12,8 +12,14 @@ Or, from a clone of the repository: `pip install -e .` (a PyPI release is planne
 
 **libmpv** is also needed:
 
-- **Windows:** download a libmpv build (`libmpv-2.dll` / `mpv-2.dll`, e.g. from the mpv-winbuild or
-  shinchiro builds) and put the DLL in the folder you run Bluehour from (or point `BLUEHOUR_LIBMPV_DIR` at its folder).
+- **Windows:** Bluehour needs one file, `libmpv-2.dll`, in a 64-bit build (use 64-bit Python).
+  1. Go to <https://github.com/shinchiro/mpv-winbuild-cmake/releases> and download the newest
+     `mpv-dev-x86_64-...7z` file (not the `v3` or `i686` ones). Unpack it with 7-Zip.
+  2. Copy `libmpv-2.dll` (sometimes named `mpv-2.dll`) out of it into a folder of your own, for example `C:\bluehour`.
+  3. Tell Bluehour where it is. In a terminal run `setx BLUEHOUR_LIBMPV_DIR "C:\bluehour"`, then close the terminal and open a new one.
+  4. Check with `bluehour --doctor`. It says whether libmpv was found.
+
+  Instead of step 3 you can put the DLL in the folder the terminal is in when you run `bluehour`.
 - **Linux:** `sudo apt install libmpv2` (or `libmpv1` on older distros). Optionally `hidapi` needs
   `libhidapi-hidraw0`, and you need a udev rule so you can read the DK2 without root:
 

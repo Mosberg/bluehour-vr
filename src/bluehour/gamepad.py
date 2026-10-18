@@ -13,6 +13,8 @@ import json
 import os
 import time
 
+from .paths import config_dir
+
 ACTIONS = ["pause", "recenter", "seek_back", "seek_fwd", "vol_up", "vol_down",
            "long_back", "long_fwd", "stereo", "proj", "position", "mute"]
 LABELS = {
@@ -35,12 +37,8 @@ AXIS_THRESHOLD = 0.7
 
 
 def default_path():
-    """Per-user config file: %APPDATA%\\bluehour on Windows, $XDG_CONFIG_HOME/bluehour elsewhere."""
-    if os.name == "nt":
-        base = os.environ.get("APPDATA") or os.path.expanduser("~")
-    else:
-        base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
-    return os.path.join(base, "bluehour", "gamepad.json")
+    """Per-user config file: bluehour/gamepad.json in the per-user config folder."""
+    return os.path.join(config_dir(), "gamepad.json")
 
 
 def load_config(path):

@@ -2,11 +2,15 @@
 """
 import argparse
 import os
+import queue
+import sys
+import threading
 import time
 
 import numpy as np
 
-from . import __version__
+from . import __version__, control, settings
+from .paths import prepare_library_path
 from .quat import NECK, q_mat, q_rot
 from .shaders import EYE_FRAG, PRESENT_FRAG, VERT
 from .tracking import (CameraTracker, MouseTracker, WiiPosition, camera_test, list_cameras, make_tracker,
@@ -16,9 +20,10 @@ from .tracking import (CameraTracker, MouseTracker, WiiPosition, camera_test, li
 # Player
 # --------------------------------------------------------------------------------------
 
-PROJ_NAMES = ["flat", "curved", "vr180", "vr360"]
-STEREO_NAMES = ["mono", "sbs", "ou"]
-POS_NAMES = ["auto", "camera", "wii", "neck", "none"]
+PROJ_NAMES = list(settings.PROJ)
+STEREO_NAMES = list(settings.STEREO)
+POS_NAMES = list(settings.POSITION)
+ROTATE_NAMES = list(settings.ROTATE)
 
 
 def guess_layout(path):
@@ -55,7 +60,7 @@ class App:
         self.tan_half = args.fov_scale
         self.ca = args.ca
         self.k = list(args.k)
-        self.rotate = {"none": 0, "cw": 1, "flip": 2, "ccw": 3}[args.rotate]
+        self.rotate = ROTATE_NAMES.index(args.rotate)
         self.vw, self.vh = 1920, 1080
         self.vfbo = self.vtex = None
         self.ofbo = self.otex = None
@@ -94,6 +99,10 @@ class App:
             "long_back": glfw.KEY_PAGE_DOWN, "long_fwd": glfw.KEY_PAGE_UP, "stereo": glfw.KEY_S,
             "position": glfw.KEY_V, "mute": glfw.KEY_M,
         }
+        self.cmd_queue = queue.Queue()
+        self.last_state = 0.0
+        if getattr(args, "control", False):
+            self._start_control()
         self._init_window()
         self._init_gl()
         self._init_mpv()
@@ -296,6 +305,131 @@ class App:
         if key is not None:
             self._on_key(self.win, key, 0, glfw.PRESS, 0)
 
+    # ---------------- live control (used by the GUI) ----------------
+    def _start_control(self):
+        def reader():
+            for line in sys.stdin:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    self.cmd_queue.put(control.parse_command(line))
+                except ValueError as exc:
+                    print("control: ignored command (%s)" % exc, flush=True)
+            self.cmd_queue.put({"cmd": "quit"})     # the GUI closed the pipe: shut down with it
+
+        threading.Thread(target=reader, daemon=True).start()
+
+    def _current_path(self):
+        try:
+            return self.player.path or self.files[0]
+        except Exception:  # noqa: BLE001
+            return self.files[0]
+
+    def _apply_set(self, name, value):
+        if name == "proj":
+            self.proj = guess_layout(self._current_path())[0] if value == "auto" else PROJ_NAMES.index(value)
+        elif name == "stereo":
+            self.stereo = guess_layout(self._current_path())[1] if value == "auto" else STEREO_NAMES.index(value)
+        elif name == "swap_eyes":
+            self.swap = int(value)
+        elif name == "rotate":
+            self.rotate = ROTATE_NAMES.index(value)
+        elif name == "screen_width":
+            self.screen_w = value
+        elif name == "distance":
+            self.dist = value
+        elif name == "ipd":
+            self.ipd = value / 1000.0
+        elif name == "fov_scale":
+            self.tan_half = value
+        elif name == "k":
+            self.k = list(value)
+        elif name == "ca":
+            self.ca = value
+        elif name == "position":
+            self.pos_mode = POS_NAMES.index(value)
+        elif name == "move_scale":
+            self.pos_scale = value
+        elif name == "volume":
+            self.player.volume = value
+        elif name == "pause":
+            self.player.pause = value
+        elif name == "mute":
+            self.player.mute = value
+
+    def _apply_command(self, cmd):
+        kind = cmd["cmd"]
+        if kind == "action":
+            self._on_key(self.win, getattr(glfw, "KEY_" + control.ACTION_KEYS[cmd["name"]]), 0, glfw.PRESS, 0)
+        elif kind == "set":
+            self._apply_set(cmd["name"], cmd["value"])
+        elif kind == "seek":
+            self.player.command("seek", cmd["value"], cmd["mode"])
+        elif kind == "load":
+            files = cmd["files"]
+            if cmd["mode"] == "replace":
+                self.player.loadfile(files[0])
+                for f in files[1:]:
+                    self.player.loadfile(f, "append")
+                self.files = list(files)
+                if not self.args.proj:
+                    self.proj = guess_layout(files[0])[0]
+                if not self.args.stereo:
+                    self.stereo = guess_layout(files[0])[1]
+            else:
+                for f in files:
+                    self.player.loadfile(f, "append")
+                self.files.extend(files)
+        elif kind == "play_index":
+            self.player.playlist_pos = cmd["index"]
+        elif kind == "quit":
+            glfw.set_window_should_close(self.win, True)
+
+    def _drain_commands(self):
+        while True:
+            try:
+                cmd = self.cmd_queue.get_nowait()
+            except queue.Empty:
+                return
+            try:
+                self._apply_command(cmd)
+            except Exception as exc:  # noqa: BLE001 - a bad command must never stop playback
+                print("control: command failed (%s)" % exc, flush=True)
+
+    def _prop(self, name, default=None):
+        try:
+            value = getattr(self.player, name)
+        except Exception:  # noqa: BLE001
+            return default
+        return default if value is None else value
+
+    def state(self):
+        playlist = []
+        try:
+            playlist = [os.path.basename(str(e.get("filename", ""))) for e in self.player.playlist][:200]
+        except Exception:  # noqa: BLE001
+            pass
+        return {
+            "pause": bool(self._prop("pause", False)), "mute": bool(self._prop("mute", False)),
+            "time": float(self._prop("time_pos", 0.0)), "duration": float(self._prop("duration", 0.0)),
+            "volume": float(self._prop("volume", 0.0)), "file": os.path.basename(str(self._prop("path", ""))),
+            "index": int(self._prop("playlist_pos", 0)), "playlist": playlist,
+            "proj": PROJ_NAMES[self.proj], "stereo": STEREO_NAMES[self.stereo], "swap_eyes": bool(self.swap),
+            "rotate": ROTATE_NAMES[self.rotate], "screen_width": self.screen_w, "distance": self.dist,
+            "ipd": round(self.ipd * 1000.0, 2), "fov_scale": round(self.tan_half, 3), "k": list(self.k),
+            "ca": self.ca, "position": POS_NAMES[self.pos_mode], "position_now": self.pos_src,
+            "move_scale": self.pos_scale,
+            "head_tracker": "dk2" if type(self.tracker).__name__ == "DK2Tracker" else "mouse",
+            "wii_controller": self.wii_ctl is not None, "wii_camera": self.wii_cam is not None,
+            "camera": self.camera is not None, "gamepads": len(self.pad.devices) if self.pad is not None else 0,
+        }
+
+    def _emit_state(self, now):
+        if getattr(self.args, "control", False) and now - self.last_state >= 0.4:
+            self.last_state = now
+            print(control.encode_state(self.state()), flush=True)
+
     def status(self):
         return ("[%s | %s%s | screen %.1f m @ %.1f m | ipd %.0f mm | fov %.2f | k1 %.2f | rotate %d | "
                 "position %s (now: %s)]" % (
@@ -413,6 +547,8 @@ class App:
         try:
             while not glfw.window_should_close(self.win):
                 glfw.poll_events()
+                self._drain_commands()
+                self._emit_state(time.time())
                 if self.wii_ctl is not None:
                     for ev in self.wii_ctl.pop_events():
                         self._on_wii_button(ev)
@@ -474,7 +610,7 @@ Wii Remote (held upright, pointing at nothing in particular - it is only a remot
 """
 
 
-def main():
+def build_parser():
     ap = argparse.ArgumentParser(prog="bluehour", description="VR media player for the Oculus Rift DK2")
     ap.add_argument("--version", action="version", version="bluehour " + __version__)
     ap.add_argument("files", nargs="*", help="video files or URLs (a file dialog opens if omitted)")
@@ -522,18 +658,21 @@ def main():
     ap.add_argument("--audio-device", help="mpv audio device name (mpv --audio-device=help)")
     ap.add_argument("--volume", type=float, default=80)
     ap.add_argument("--debug", action="store_true")
+    ap.add_argument("--doctor", action="store_true",
+                    help="check Python packages, libmpv, the DK2, Wii Remotes and controllers, then exit")
+    # JSON commands on stdin, state lines on stdout: used by the GUI
+    ap.add_argument("--control", action="store_true", help=argparse.SUPPRESS)
+    return ap
+
+
+def main():
+    ap = build_parser()
     args = ap.parse_args()
 
-    # libmpv-2.dll / mpv-2.dll is looked up in the current folder, the package folder and $BLUEHOUR_LIBMPV_DIR.
-    here = os.path.dirname(os.path.abspath(__file__))
-    for folder in filter(None, (os.environ.get("BLUEHOUR_LIBMPV_DIR"), os.getcwd(), here)):
-        os.environ["PATH"] = folder + os.pathsep + os.environ.get("PATH", "")
-        if hasattr(os, "add_dll_directory") and os.path.isdir(folder):
-            try:
-                os.add_dll_directory(folder)
-            except OSError:
-                pass
-
+    prepare_library_path()
+    if args.doctor:
+        from . import doctor
+        raise SystemExit(doctor.run())
     if args.list_cameras:
         list_cameras()
         return

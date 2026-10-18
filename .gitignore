@@ -18,3 +18,4 @@ gamepad.json
 .vscode/
 .DS_Store
 Thumbs.db
+_site/
