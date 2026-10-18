@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bluehour-vr"
+dynamic = ["version"]
+description = "A VR media player for the Oculus Rift DK2 that needs no Oculus runtime, SteamVR or OpenXR."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Rasmus Toftegård Mosberg" }]
+requires-python = ">=3.9"
+keywords = ["vr", "oculus", "rift", "dk2", "video-player", "mpv", "stereoscopic", "3d", "vr180", "vr360"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Video :: Display",
+    "Typing :: Typed",
+]
+dependencies = [
+    "numpy>=1.23",
+    "glfw>=2.6",
+    "PyOpenGL>=3.1.7",
+    "python-mpv>=1.0.5",
+    "hidapi>=0.14",
+]
+
+[project.optional-dependencies]
+camera = ["opencv-python>=4.8"]
+dev = ["ruff>=0.6", "build>=1.2"]
+
+[project.scripts]
+bluehour = "bluehour.player:main"
+
+[project.urls]
+Homepage = "https://mosberg.github.io/bluehour-vr/"
+Documentation = "https://mosberg.github.io/bluehour-vr/"
+Source = "https://github.com/Mosberg/bluehour-vr"
+Issues = "https://github.com/Mosberg/bluehour-vr/issues"
+Changelog = "https://github.com/Mosberg/bluehour-vr/blob/main/CHANGELOG.md"
+
+[tool.setuptools.dynamic]
+version = { attr = "bluehour.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+bluehour = ["py.typed"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]

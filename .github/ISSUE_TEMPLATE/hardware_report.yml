@@ -1,0 +1,36 @@
+name: Hardware report
+description: Tell us what worked or not on your real hardware
+labels: [hardware]
+body:
+  - type: markdown
+    attributes:
+      value: Thank you. This is the most useful report right now. The checklist is in `docs/hardware-testing.md`.
+  - type: checkboxes
+    id: worked
+    attributes:
+      label: What worked
+      options:
+        - label: Picture on the DK2 (right way up, correct size)
+        - label: Head rotation (directions correct without `--axis-map`)
+        - label: Lens distortion looks right
+        - label: DK2 camera position tracking
+        - label: Wii Remote as a controller
+        - label: Wii Remote as an IR camera
+        - label: USB gamepad
+  - type: textarea
+    id: needed
+    attributes:
+      label: What you had to change
+      description: For example `--axis-map "-x,y,-z"`, `--rotate cw`, `--k` values, camera settings.
+      render: shell
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: Hardware revision, Windows or Linux version, GPU, what looked wrong.
+  - type: input
+    id: version
+    attributes:
+      label: Bluehour version
+    validations:
+      required: true

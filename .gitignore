@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.env
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+# local controller mappings and libmpv binaries
+gamepad.json
+*.dll
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

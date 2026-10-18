@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://mosberg.github.io/bluehour-vr/
+    about: Setup, controls, troubleshooting and the Wii Remote and gamepad guides.

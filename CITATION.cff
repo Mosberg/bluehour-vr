@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: "If you use Bluehour, please cite it as below."
+title: "Bluehour"
+type: software
+version: 0.1.0
+date-released: 2026-10-18
+license: MIT
+repository-code: "https://github.com/Mosberg/bluehour-vr"
+url: "https://mosberg.github.io/bluehour-vr/"
+authors:
+  - family-names: Mosberg
+    given-names: Rasmus Toftegård
+abstract: "A VR media player for the Oculus Rift DK2 that needs no Oculus runtime, SteamVR or OpenXR."
